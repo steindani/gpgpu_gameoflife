@@ -33,13 +33,28 @@ unsigned char *visualizationBufferCPU;
 
 int windowWidth = 600;
 int windowHeight = 600;
-int zoom = 3;
-int fieldWidth = 200;
-int fieldHeight = 200;
+float zoom = 3;
+int fieldWidth = 600;
+int fieldHeight = 600;
+float offsetW = 0;
+float offsetH = 0;
 
 bool keysPressed[256];
 int mX, mY;
 
+
+void randomizeField() {
+    for (int i = 0; i < fieldHeight * fieldWidth; i++) {
+        visualizationBufferCPU[i * 4 + 0] = 0;
+        visualizationBufferCPU[i * 4 + 1] = 0;
+        visualizationBufferCPU[i * 4 + 2] = 0;
+        visualizationBufferCPU[i * 4 + 3] = (rand() % 5) * 255;
+    }
+
+    queue.enqueueWriteBuffer(visualizationBufferGPU, CL_TRUE, 0,
+                             sizeof(unsigned char) * 4 * fieldWidth * fieldHeight,
+                             visualizationBufferCPU, NULL, NULL);
+}
 
 void initOpenGL() {
     glGenTextures(1, &texture);
@@ -52,13 +67,6 @@ void initOpenGL() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
     visualizationBufferCPU = new unsigned char[fieldHeight * fieldWidth * 4];
-
-    for (int i = 0; i < fieldHeight * fieldWidth; i++) {
-        visualizationBufferCPU[i * 4 + 0] = 0;
-        visualizationBufferCPU[i * 4 + 1] = 0;
-        visualizationBufferCPU[i * 4 + 2] = 0;
-        visualizationBufferCPU[i * 4 + 3] = (rand() % 5) * 255;
-    }
 }
 
 void simulationStep() {
@@ -99,17 +107,22 @@ void visualizationStep() {
     float ONEW = float(windowWidth) / float(fieldWidth) / zoom;
     float ONEH = float(windowHeight) / float(fieldHeight) / zoom;
 
+    float STARTW = (ONEW * (1 - offsetW)) / -2;
+    float ENDW = (ONEW * (1 + offsetW)) / 2;
+    float STARTH = (ONEH * (1 - offsetH)) / -2;
+    float ENDH = (ONEH * (1 + offsetH)) / 2;
+
     glBegin(GL_QUADS);
-    glTexCoord2f(0, 0);
+    glTexCoord2f(STARTW, STARTH);
     glVertex2f(-1, -1);
 
-    glTexCoord2f(ONEW, 0);
+    glTexCoord2f(ENDW, STARTH);
     glVertex2f(1, -1);
 
-    glTexCoord2f(ONEW, ONEH);
+    glTexCoord2f(ENDW, ENDH);
     glVertex2f(1, 1);
 
-    glTexCoord2f(0, ONEH);
+    glTexCoord2f(STARTW, ENDH);
     glVertex2f(-1, 1);
     glEnd();
 
@@ -128,12 +141,13 @@ void idle() {
 void reshape(int newWidth, int newHeight) {
     windowWidth = newWidth;
     windowHeight = newHeight;
+
+
     glViewport(0, 0, newWidth, newHeight);
 }
 
 void keyDown(unsigned char key, int x, int y) {
     keysPressed[key] = true;
-    simulationStep();
 }
 
 void keyUp(unsigned char key, int x, int y) {
@@ -142,7 +156,41 @@ void keyUp(unsigned char key, int x, int y) {
         case 27:
             exit(0);
             break;
+        case 'q':
+            zoom *= 1.1f;
+            offsetW *= 1.1f;
+            offsetH *= 1.1f;
+            break;
+        case 'e':
+            zoom /= 1.1f;
+            offsetW /= 1.1f;
+            offsetH /= 1.1f;
+            break;
+        case '0':
+            zoom = 3;
+            break;
+
+        case 'w':
+            offsetH += 0.1f;
+            break;
+        case 'a':
+            offsetW -= 0.1f;
+            break;
+        case 's':
+            offsetH -= 0.1f;
+            break;
+        case 'd':
+            offsetW += 0.1f;
+            break;
+
+        case 'r':
+            randomizeField();
+            display();
+            break;
+        default:
+            simulationStep();
     }
+    glutPostRedisplay();
 }
 
 void mouseClick(int button, int state, int x, int y) {
@@ -153,10 +201,9 @@ void mouseClick(int button, int state, int x, int y) {
 }
 
 void mouseMove(int x, int y) {
-//    force.s[0] = (float)(x - mX);
-//    force.s[1] = -(float)(y - mY);
-//    //addForce(mX, height - mY, force);
-//    addForce(256, 256, force);
+    offsetW -= float(x - mX) / windowWidth;
+    offsetH += float(y - mY) / windowHeight;
+
     mX = x;
     mY = y;
 }
@@ -184,10 +231,7 @@ void initSimulation() {
         visualizationBufferGPU = cl::Buffer(context, CL_MEM_WRITE_ONLY,
                                             sizeof(unsigned char) * 4 * fieldWidth * fieldHeight,
                                             nullptr, nullptr);
-
-        queue.enqueueWriteBuffer(visualizationBufferGPU, CL_TRUE, 0,
-                                 sizeof(unsigned char) * 4 * fieldWidth * fieldHeight,
-                                 visualizationBufferCPU, NULL, NULL);
+        randomizeField();
 
         stepKernel = cl::Kernel(simulationProgram, "tick");
         stepKernel.setArg(0, fieldWidth);
