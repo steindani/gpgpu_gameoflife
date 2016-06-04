@@ -1,6 +1,8 @@
 # Game of Life using OpenCL
 The well known game of Conway as a homework assignment for the GPGPU course at Budapest University of Technology and Economics, 2016.
 
+![](https://github.com/steindani/gpgpu_gameoflife/wiki/images/gpgpu_gol1.gif)
+
 ## Dependencies and Compilation
 The game was developed and run on Arch Linux, with CMake, OpenGL and OpenCL preinstalled.
 
